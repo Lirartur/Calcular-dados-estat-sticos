@@ -1,0 +1,275 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import linregress, skew, kurtosis
+
+# LEITURA DOS DADOS
+
+def carregar_dados(caminho):
+    return pd.read_excel(caminho)
+
+# STURGES + DISTRIBUIÇÃO
+
+def sturges_bins(data):
+    n = len(data)
+    return int(1 + 3.3 * np.log10(n)) if n > 0 else 1
+
+def distribuicao_frequencia(data):
+    k = sturges_bins(data)
+    freq, bins = np.histogram(data, bins=k)
+    return freq, bins
+
+# HISTOGRAMA
+
+def plot_histograma(data):
+    if len(data) == 0:
+        return
+    plt.figure()
+    plt.hist(data, bins=sturges_bins(data))
+    plt.title("Histograma")
+    plt.xlabel("Valores")
+    plt.ylabel("Frequência")
+    plt.savefig("histograma.png")
+    plt.close()
+
+# MÉDIAS
+
+def media_aritmetica(data):
+    return np.mean(data) if len(data) > 0 else 0
+
+def media_geometrica(data):
+    data = data[data > 0]
+    return np.exp(np.mean(np.log(data))) if len(data) > 0 else 0
+
+def media_harmonica(data):
+    data = data[data != 0]
+    return len(data) / np.sum(1 / data) if len(data) > 0 else 0
+
+# MEDIANA / QUARTIS / PERCENTIS
+
+def mediana(data):
+    return np.median(data) if len(data) > 0 else 0
+
+def quartis(data):
+    return np.percentile(data, [25, 75]) if len(data) > 0 else (0, 0)
+
+def percentis(data):
+    return np.percentile(data, [10, 90]) if len(data) > 0 else (0, 0)
+
+# VARIÂNCIA E DESVIO PADRÃO
+
+def variancia(data):
+    return np.var(data, ddof=1) if len(data) > 1 else 0
+
+def desvio_padrao(data):
+    return np.std(data, ddof=1) if len(data) > 1 else 0
+
+# COEFICIENTE DE VARIAÇÃO
+
+def coef_variacao(data):
+    media = media_aritmetica(data)
+    if media == 0:
+        return 0, "Indefinido"
+
+    cv = (desvio_padrao(data) / media) * 100
+
+    if cv < 15:
+        classificacao = "Baixa dispersão"
+    elif cv < 30:
+        classificacao = "Média dispersão"
+    else:
+        classificacao = "Alta dispersão"
+
+    return cv, classificacao
+
+# MODA (CZUBER)
+
+def moda_czuber(data):
+    if len(data) == 0:
+        return 0
+
+    freq, bins = distribuicao_frequencia(data)
+    i = np.argmax(freq)
+
+    l = bins[i]
+    h = bins[1] - bins[0]
+
+    f1 = freq[i]
+    f0 = freq[i-1] if i > 0 else 0
+    f2 = freq[i+1] if i < len(freq)-1 else 0
+
+    denom = (2*f1 - f0 - f2)
+    if denom == 0:
+        return l
+
+    return l + ((f1 - f0) / denom) * h
+
+# ASSIMETRIA E CURTOSE
+
+def assimetria(data):
+    if len(data) == 0:
+        return 0, "Indefinido"
+
+    val = skew(data)
+    if val > 0:
+        return val, "Assimetria positiva"
+    elif val < 0:
+        return val, "Assimetria negativa"
+    else:
+        return val, "Simétrica"
+
+def curtose_grau(data):
+    if len(data) == 0:
+        return 0, "Indefinido"
+
+    val = kurtosis(data)
+    if val > 0:
+        return val, "Leptocúrtica"
+    elif val < 0:
+        return val, "Platicúrtica"
+    else:
+        return val, "Mesocúrtica"
+
+# CORRELAÇÃO
+
+def correlacao(x, y):
+    if len(x) == 0 or len(y) == 0:
+        return 0
+    return np.corrcoef(x, y)[0, 1]
+
+# REGRESSÕES
+
+
+def regressao_linear(x, y):
+    slope, intercept, _, _, _ = linregress(x, y)
+    return slope * x + intercept
+
+def regressao_exponencial(x, y):
+    mask = y > 0
+    if np.sum(mask) < 2:
+        return np.zeros_like(x)
+    y_log = np.log(y[mask])
+    slope, intercept, _, _, _ = linregress(x[mask], y_log)
+    return np.exp(intercept) * np.exp(slope * x)
+
+def regressao_logaritmica(x, y):
+    mask = x > 0
+    if np.sum(mask) < 2:
+        return np.zeros_like(x)
+    x_log = np.log(x[mask])
+    slope, intercept, _, _, _ = linregress(x_log, y[mask])
+    return slope * np.log(x) + intercept
+
+def regressao_potencia(x, y):
+    mask = (x > 0) & (y > 0)
+    if np.sum(mask) < 2:
+        return np.zeros_like(x)
+    x_log = np.log(x[mask])
+    y_log = np.log(y[mask])
+    slope, intercept, _, _, _ = linregress(x_log, y_log)
+    return np.exp(intercept) * x**slope
+
+def regressao_polinomial(x, y):
+    if len(x) < 3:
+        return np.zeros_like(x)
+    coef = np.polyfit(x, y, 2)
+    return np.polyval(coef, x)
+
+# ERRO PERCENTUAL MÉDIO
+
+def erro_percentual_medio(y_real, y_pred):
+    mask = y_real != 0
+    if np.sum(mask) == 0:
+        return 0
+    return np.mean(np.abs((y_real[mask] - y_pred[mask]) / y_real[mask])) * 100
+
+# ESTATÍSTICAS
+
+def calcular_estatisticas(data):
+    resultados = {}
+
+    resultados["Média"] = media_aritmetica(data)
+    resultados["Mediana"] = mediana(data)
+    resultados["Moda (Czuber)"] = moda_czuber(data)
+    resultados["Média Geométrica"] = media_geometrica(data)
+    resultados["Média Harmônica"] = media_harmonica(data)
+
+    q1, q3 = quartis(data)
+    p10, p90 = percentis(data)
+
+    resultados["Q1"] = q1
+    resultados["Q3"] = q3
+    resultados["P10"] = p10
+    resultados["P90"] = p90
+
+    resultados["Variância"] = variancia(data)
+    resultados["Desvio Padrão"] = desvio_padrao(data)
+
+    cv, cls = coef_variacao(data)
+    resultados["Coef Var (%)"] = cv
+    resultados["Classificação CV"] = cls
+
+    assim, assim_cls = assimetria(data)
+    resultados["Assimetria"] = assim
+    resultados["Classificação Assimetria"] = assim_cls
+
+    curt, curt_cls = curtose_grau(data)
+    resultados["Curtose"] = curt
+    resultados["Classificação Curtose"] = curt_cls
+
+    return resultados
+
+# FUNÇÃO PRINCIPAL
+
+def main(caminho_arquivo):
+    df = carregar_dados(caminho_arquivo)
+
+    x = df.iloc[:, 0].dropna().values
+    y = df.iloc[:, 1].dropna().values
+
+    # mantém alinhamento
+    mask = (x > 0) & (y > 0)
+    x = x[mask]
+    y = y[mask]
+
+    plot_histograma(x)
+
+    resultados_x = calcular_estatisticas(x)
+    resultados_y = calcular_estatisticas(y)
+
+    modelos = {
+        "Linear": regressao_linear(x, y),
+        "Exponencial": regressao_exponencial(x, y),
+        "Logarítmica": regressao_logaritmica(x, y),
+        "Potência": regressao_potencia(x, y),
+        "Polinomial": regressao_polinomial(x, y)
+    }
+
+    erros = {nome: erro_percentual_medio(y, pred) for nome, pred in modelos.items()}
+    melhor_modelo = min(erros, key=erros.get)
+
+    df_x = pd.DataFrame(list(resultados_x.items()), columns=["Métrica", "X"])
+    df_y = pd.DataFrame(list(resultados_y.items()), columns=["Métrica", "Y"])
+
+    df_final = pd.merge(df_x, df_y, on="Métrica")
+
+    df_extra = pd.DataFrame({
+        "Métrica": ["Correlação", "Melhor Modelo", "EPM"],
+        "Valor": [correlacao(x, y), melhor_modelo, erros[melhor_modelo]]
+    })
+
+    import datetime
+    import os
+
+    pasta = os.path.dirname(caminho_arquivo)
+    nome_arquivo = os.path.join(
+        pasta,
+        f"resultado_{datetime.datetime.now().strftime('%H%M%S')}.xlsx"
+    )
+
+    with pd.ExcelWriter(nome_arquivo) as writer:
+        df_final.to_excel(writer, sheet_name="Estatísticas", index=False)
+        df_extra.to_excel(writer, sheet_name="Modelos", index=False)
+
+    print("✅ Arquivo gerado em:")
+    print(nome_arquivo)
